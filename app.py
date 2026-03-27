@@ -98,7 +98,17 @@ def update_lead_compass_chart(lead_id, file_id):
     }
 
     resp = requests.put(url, headers=headers, json=payload, timeout=60)
-    resp.raise_for_status()
+
+    if not resp.ok:
+        try:
+            error_body = resp.json()
+        except Exception:
+            error_body = {"raw_text": resp.text}
+
+        raise RuntimeError(
+            f"Zoho CRM update failed. Status={resp.status_code}, Response={error_body}"
+        )
+
     return resp.json()
 
 
