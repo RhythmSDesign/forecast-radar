@@ -78,26 +78,60 @@ def upload_file_to_zfs(png_path):
 
 def update_lead_compass_chart(lead_id, file_id):
     access_token, api_domain = get_zoho_access_token()
-    url = f"{api_domain}/crm/v8/Leads/{lead_id}"
+
     headers = {
         "Authorization": f"Zoho-oauthtoken {access_token}",
         "Content-Type": "application/json",
     }
 
-    payload = {
-        "data": [
+    # Step 1: Read the existing lead record
+    get_url = f"{api_domain}/crm/v8/Leads/{lead_id}"
+    get_resp = requests.get(get_url, headers=headers, timeout=60)
+
+    if not get_resp.ok:
+        try:
+            error_body = get_resp.json()
+        except Exception:
+            error_body = {"raw_text": get_resp.text}
+
+        raise RuntimeError(
+            f"Zoho CRM read failed. Status={get_resp.status_code}, Response={error_body}"
+        )
+
+    get_data = get_resp.json()
+    existing_images = []
+
+    if "data" in get_data and get_data["data"]:
+        lead_record = get_data["data"][0]
+        existing_images = lead_record.get("Compass_Chart", [])
+
+    # Step 2: Build payload
+    record_payload = {
+        "id": lead_id,
+        "Compass_Chart": [
             {
-                "id": lead_id,
-                "Compass_Chart": [
-                    {
-                        "File_Id__s": file_id
-                    }
-                ]
+                "File_Id__s": file_id
             }
         ]
     }
 
-    resp = requests.put(url, headers=headers, json=payload, timeout=60)
+    # If an image already exists, tell Zoho to delete it first
+    if existing_images and len(existing_images) > 0:
+        old_file_id = existing_images[0].get("File_ID__s")
+        if old_file_id:
+            record_payload["_delete"] = {
+                "Compass_Chart": [
+                    old_file_id
+                ]
+            }
+
+    payload = {
+        "data": [record_payload]
+    }
+
+    # Step 3: Update the lead
+    update_url = f"{api_domain}/crm/v8/Leads/{lead_id}"
+    resp = requests.put(update_url, headers=headers, json=payload, timeout=60)
 
     if not resp.ok:
         try:
