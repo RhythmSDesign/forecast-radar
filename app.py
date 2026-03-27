@@ -84,7 +84,7 @@ def update_lead_compass_chart(lead_id, file_id):
         "Content-Type": "application/json",
     }
 
-    # Step 1: Read the existing lead record
+    # 1) Read the existing lead
     get_url = f"{api_domain}/crm/v8/Leads/{lead_id}"
     get_resp = requests.get(get_url, headers=headers, timeout=60)
 
@@ -93,7 +93,6 @@ def update_lead_compass_chart(lead_id, file_id):
             error_body = get_resp.json()
         except Exception:
             error_body = {"raw_text": get_resp.text}
-
         raise RuntimeError(
             f"Zoho CRM read failed. Status={get_resp.status_code}, Response={error_body}"
         )
@@ -105,40 +104,64 @@ def update_lead_compass_chart(lead_id, file_id):
         lead_record = get_data["data"][0]
         existing_images = lead_record.get("Compass_Chart", [])
 
-    # Step 2: Build payload
-    record_payload = {
-        "id": lead_id,
-        "Compass_Chart": [
+    # 2) If an image already exists, delete it first
+    if existing_images and len(existing_images) > 0:
+        existing_image_id = existing_images[0].get("id")
+
+        if existing_image_id:
+            delete_payload = {
+                "data": [
+                    {
+                        "id": lead_id,
+                        "Compass_Chart": [
+                            {
+                                "id": existing_image_id,
+                                "_delete": None
+                            }
+                        ]
+                    }
+                ]
+            }
+
+            delete_url = f"{api_domain}/crm/v8/Leads/{lead_id}"
+            delete_resp = requests.put(
+                delete_url,
+                headers=headers,
+                json=delete_payload,
+                timeout=60
+            )
+
+            if not delete_resp.ok:
+                try:
+                    error_body = delete_resp.json()
+                except Exception:
+                    error_body = {"raw_text": delete_resp.text}
+                raise RuntimeError(
+                    f"Zoho CRM delete-old-image failed. Status={delete_resp.status_code}, Response={error_body}"
+                )
+
+    # 3) Add the new image
+    add_payload = {
+        "data": [
             {
-                "File_Id__s": file_id
+                "id": lead_id,
+                "Compass_Chart": [
+                    {
+                        "File_Id__s": file_id
+                    }
+                ]
             }
         ]
     }
 
-    # If an image already exists, tell Zoho to delete it first
-    if existing_images and len(existing_images) > 0:
-        old_file_id = existing_images[0].get("File_ID__s")
-        if old_file_id:
-            record_payload["_delete"] = {
-                "Compass_Chart": [
-                    old_file_id
-                ]
-            }
-
-    payload = {
-        "data": [record_payload]
-    }
-
-    # Step 3: Update the lead
     update_url = f"{api_domain}/crm/v8/Leads/{lead_id}"
-    resp = requests.put(update_url, headers=headers, json=payload, timeout=60)
+    resp = requests.put(update_url, headers=headers, json=add_payload, timeout=60)
 
     if not resp.ok:
         try:
             error_body = resp.json()
         except Exception:
             error_body = {"raw_text": resp.text}
-
         raise RuntimeError(
             f"Zoho CRM update failed. Status={resp.status_code}, Response={error_body}"
         )
