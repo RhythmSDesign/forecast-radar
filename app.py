@@ -84,18 +84,18 @@ def update_lead_compass_chart(lead_id, file_id):
         "Content-Type": "application/json",
     }
 
- payload = {
-    "data": [
-        {
-            "id": lead_id,
-            "Compass_Chart": [
-                {
-                    "File_Id__s": file_id
-                }
-            ]
-        }
-    ]
-}
+    payload = {
+        "data": [
+            {
+                "id": lead_id,
+                "Compass_Chart": [
+                    {
+                        "File_Id__s": file_id
+                    }
+                ]
+            }
+        ]
+    }
 
     resp = requests.put(url, headers=headers, json=payload, timeout=60)
     resp.raise_for_status()
