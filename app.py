@@ -222,7 +222,7 @@ def generate_and_upload_bar():
 
     try:
         lead_id = str(data["lead_id"]).strip()
-        total_score = int(data["total_score"])
+        total_score = float(data["total_score"])
     except Exception:
         return jsonify(
             {
@@ -237,6 +237,7 @@ def generate_and_upload_bar():
 
         generate_forecast_bar(
             total_score=total_score,
+            total=75,
             output_svg=str(svg_path),
             output_png=str(png_path),
         )
