@@ -57,7 +57,7 @@ def upload_file_to_zfs(png_path):
 
     with open(png_path, "rb") as f:
         files = {
-            "file": ("forecast_radar.png", f, "image/png")
+            "file": ("chart.png", f, "image/png")
         }
         resp = requests.post(url, headers=headers, files=files, timeout=60)
 
@@ -76,15 +76,13 @@ def upload_file_to_zfs(png_path):
     return file_id
 
 
-def update_lead_compass_chart(lead_id, file_id):
+def replace_image_field(lead_id, field_api_name, file_id):
     access_token, api_domain = get_zoho_access_token()
-
     headers = {
         "Authorization": f"Zoho-oauthtoken {access_token}",
         "Content-Type": "application/json",
     }
 
-    # 1) Read the existing lead
     get_url = f"{api_domain}/crm/v8/Leads/{lead_id}"
     get_resp = requests.get(get_url, headers=headers, timeout=60)
 
@@ -102,9 +100,8 @@ def update_lead_compass_chart(lead_id, file_id):
 
     if "data" in get_data and get_data["data"]:
         lead_record = get_data["data"][0]
-        existing_images = lead_record.get("Compass_Chart", [])
+        existing_images = lead_record.get(field_api_name, [])
 
-    # 2) If an image already exists, delete it first
     if existing_images and len(existing_images) > 0:
         existing_image_id = existing_images[0].get("id")
 
@@ -113,7 +110,7 @@ def update_lead_compass_chart(lead_id, file_id):
                 "data": [
                     {
                         "id": lead_id,
-                        "Compass_Chart": [
+                        field_api_name: [
                             {
                                 "id": existing_image_id,
                                 "_delete": None
@@ -140,12 +137,11 @@ def update_lead_compass_chart(lead_id, file_id):
                     f"Zoho CRM delete-old-image failed. Status={delete_resp.status_code}, Response={error_body}"
                 )
 
-    # 3) Add the new image
     add_payload = {
         "data": [
             {
                 "id": lead_id,
-                "Compass_Chart": [
+                field_api_name: [
                     {
                         "File_Id__s": file_id
                     }
@@ -206,7 +202,7 @@ def generate_and_upload_chart():
         )
 
         file_id = upload_file_to_zfs(str(png_path))
-        update_response = update_lead_compass_chart(lead_id, file_id)
+        update_response = replace_image_field(lead_id, "Compass_Chart", file_id)
 
         return jsonify(
             {
@@ -216,106 +212,9 @@ def generate_and_upload_chart():
                 "crm_response": update_response,
             }
         )
-
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port)
-
-def update_lead_forecast_bar(lead_id, file_id):
-    access_token, api_domain = get_zoho_access_token()
-
-    headers = {
-        "Authorization": f"Zoho-oauthtoken {access_token}",
-        "Content-Type": "application/json",
-    }
-
-    # Read existing lead
-    get_url = f"{api_domain}/crm/v8/Leads/{lead_id}"
-    get_resp = requests.get(get_url, headers=headers, timeout=60)
-
-    if not get_resp.ok:
-        try:
-            error_body = get_resp.json()
-        except Exception:
-            error_body = {"raw_text": get_resp.text}
-        raise RuntimeError(
-            f"Zoho CRM read failed. Status={get_resp.status_code}, Response={error_body}"
-        )
-
-    get_data = get_resp.json()
-    existing_images = []
-
-    if "data" in get_data and get_data["data"]:
-        lead_record = get_data["data"][0]
-        existing_images = lead_record.get("Forecast_Bar", [])
-
-    # Delete old image first if one exists
-    if existing_images and len(existing_images) > 0:
-        existing_image_id = existing_images[0].get("id")
-
-        if existing_image_id:
-            delete_payload = {
-                "data": [
-                    {
-                        "id": lead_id,
-                        "Forecast_Bar": [
-                            {
-                                "id": existing_image_id,
-                                "_delete": None
-                            }
-                        ]
-                    }
-                ]
-            }
-
-            delete_url = f"{api_domain}/crm/v8/Leads/{lead_id}"
-            delete_resp = requests.put(
-                delete_url,
-                headers=headers,
-                json=delete_payload,
-                timeout=60
-            )
-
-            if not delete_resp.ok:
-                try:
-                    error_body = delete_resp.json()
-                except Exception:
-                    error_body = {"raw_text": delete_resp.text}
-                raise RuntimeError(
-                    f"Zoho CRM delete-old-bar-image failed. Status={delete_resp.status_code}, Response={error_body}"
-                )
-
-    # Add new image
-    add_payload = {
-        "data": [
-            {
-                "id": lead_id,
-                "Forecast_Bar": [
-                    {
-                        "File_Id__s": file_id
-                    }
-                ]
-            }
-        ]
-    }
-
-    update_url = f"{api_domain}/crm/v8/Leads/{lead_id}"
-    resp = requests.put(update_url, headers=headers, json=add_payload, timeout=60)
-
-    if not resp.ok:
-        try:
-            error_body = resp.json()
-        except Exception:
-            error_body = {"raw_text": resp.text}
-        raise RuntimeError(
-            f"Zoho CRM forecast bar update failed. Status={resp.status_code}, Response={error_body}"
-        )
-
-    return resp.json()
 
 @app.route("/generate-and-upload-bar", methods=["POST"])
 def generate_and_upload_bar():
@@ -343,7 +242,7 @@ def generate_and_upload_bar():
         )
 
         file_id = upload_file_to_zfs(str(png_path))
-        update_response = update_lead_forecast_bar(lead_id, file_id)
+        update_response = replace_image_field(lead_id, "Forecast_Bar", file_id)
 
         return jsonify(
             {
@@ -353,6 +252,10 @@ def generate_and_upload_bar():
                 "crm_response": update_response,
             }
         )
-
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port)
