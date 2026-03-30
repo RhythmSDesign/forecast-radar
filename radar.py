@@ -138,23 +138,12 @@ def generate_forecast_radar(
 
     return output_svg, output_png
 
-    def generate_forecast_bar(
+
+def generate_forecast_bar(
     total_score,
     output_svg="forecast_bar.svg",
     output_png="forecast_bar.png",
 ):
-    """
-    Locked forecast bar graphic.
-
-    Score ranges:
-    - Fragile: 15-39
-    - Vulnerable: 40-57
-    - Future-Proof: 58-75
-    """
-
-    from pathlib import Path
-    import cairosvg
-
     if total_score < 15 or total_score > 75:
         raise ValueError("total_score must be between 15 and 75")
 
@@ -176,7 +165,6 @@ def generate_forecast_radar(
     max_score = 75
     score_range = max_score - min_score
 
-    # marker position
     pct = (total_score - min_score) / score_range
     marker_x = bar_x + (bar_w * pct)
 
@@ -187,9 +175,14 @@ def generate_forecast_radar(
     else:
         tier = "Future-Proof"
 
+    def x_for_score(score):
+        return bar_x + ((score - min_score) / score_range) * bar_w
+
+    x_39 = x_for_score(39)
+    x_57 = x_for_score(57)
+
     svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}">']
 
-    # title
     svg.append(f'''
     <text x="{W/2}" y="55" text-anchor="middle"
           font-family="Arial, Helvetica, sans-serif"
@@ -198,35 +191,24 @@ def generate_forecast_radar(
     </text>
     ''')
 
-    # background bar
     svg.append(f'''
     <rect x="{bar_x}" y="{bar_y}" width="{bar_w}" height="{bar_h}"
           rx="{radius}" ry="{radius}" fill="{tan}" />
     ''')
 
-    # fragile / vulnerable / future-proof segment lines
-    def x_for_score(score):
-        return bar_x + ((score - min_score) / score_range) * bar_w
-
-    x_39 = x_for_score(39)
-    x_57 = x_for_score(57)
-
     svg.append(f'<line x1="{x_39}" y1="{bar_y-10}" x2="{x_39}" y2="{bar_y+bar_h+10}" stroke="{white}" stroke-width="4"/>')
     svg.append(f'<line x1="{x_57}" y1="{bar_y-10}" x2="{x_57}" y2="{bar_y+bar_h+10}" stroke="{white}" stroke-width="4"/>')
 
-    # marker line
     svg.append(f'''
     <line x1="{marker_x}" y1="{bar_y-34}" x2="{marker_x}" y2="{bar_y+bar_h+34}"
           stroke="{orange}" stroke-width="6"/>
     ''')
 
-    # marker dot
     svg.append(f'''
     <circle cx="{marker_x}" cy="{bar_y + bar_h/2}" r="12"
             fill="{orange}" stroke="{white}" stroke-width="3"/>
     ''')
 
-    # score label above marker
     svg.append(f'''
     <text x="{marker_x}" y="{bar_y-48}" text-anchor="middle"
           font-family="Arial, Helvetica, sans-serif"
@@ -235,7 +217,6 @@ def generate_forecast_radar(
     </text>
     ''')
 
-    # tier labels
     svg.append(f'''
     <text x="{(bar_x + x_39)/2}" y="{bar_y+bar_h+52}" text-anchor="middle"
           font-family="Arial, Helvetica, sans-serif"
@@ -260,7 +241,6 @@ def generate_forecast_radar(
     </text>
     ''')
 
-    # current tier text
     svg.append(f'''
     <text x="{W/2}" y="{bar_y+bar_h+110}" text-anchor="middle"
           font-family="Arial, Helvetica, sans-serif"
