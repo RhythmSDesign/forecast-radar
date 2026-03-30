@@ -139,126 +139,84 @@ def generate_forecast_radar(
     return output_svg, output_png
 
 
+def get_bar_label(score: float) -> str:
+    if 15 <= score <= 39:
+        return "Fragile"
+    elif 40 <= score <= 57:
+        return "Vulnerable"
+    elif 58 <= score <= 75:
+        return "Future-Proof"
+    return ""
+
+
 def generate_forecast_bar(
     total_score,
     output_svg="forecast_bar.svg",
     output_png="forecast_bar.png",
+    total=75,
+    png_scale=4.0,
 ):
-    if total_score < 15 or total_score > 75:
-        raise ValueError("total_score must be between 15 and 75")
+    """
+    Locked forecast bar template.
 
-    W, H = 1200, 360
+    Uses approved design:
+    - 516.87 x 72.56 viewBox
+    - gradient bar
+    - vertical marker line behind bar
+    - marker dot above
+    - auto top labels: score/total and Fragile/Vulnerable/Future-Proof
+    """
 
-    navy = "#00002d"
-    orange = "#ea951d"
-    tan = "#d8d1ca"
-    white = "#ffffff"
-    text_gray = "#6f675f"
+    W, H = 516.87, 72.56
+    X_START, X_END = 6.5, 510.37
+    Y_BAR = 66.06
+    Y_LINE_TOP = 47.61
+    Y_DOT = 44.04
+    DOT_R = 3.5
 
-    bar_x = 140
-    bar_y = 150
-    bar_w = 920
-    bar_h = 42
-    radius = 21
+    if total <= 0:
+        raise ValueError("total must be greater than 0")
 
-    min_score = 15
-    max_score = 75
-    score_range = max_score - min_score
+    score = max(0, min(float(total_score), float(total)))
+    x = X_START + (score / total) * (X_END - X_START)
+    label = get_bar_label(score)
+    top_text = f"{int(score)}/{int(total)}"
 
-    pct = (total_score - min_score) / score_range
-    marker_x = bar_x + (bar_w * pct)
+    label_tspan = f'<tspan x="{x:.2f}" y="24.52">{label}</tspan>' if label else ""
 
-    if 15 <= total_score <= 39:
-        tier = "Fragile"
-    elif 40 <= total_score <= 57:
-        tier = "Vulnerable"
-    else:
-        tier = "Future-Proof"
+    svg = f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">
+  <defs>
+    <linearGradient id="bar-gradient" x1="0" y1="0" x2="{W}" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff3800"/>
+      <stop offset=".5" stop-color="#f78f00"/>
+      <stop offset="1" stop-color="#8faf7e"/>
+    </linearGradient>
+  </defs>
 
-    def x_for_score(score):
-        return bar_x + ((score - min_score) / score_range) * bar_w
+  <line x1="{x:.2f}" y1="{Y_LINE_TOP}" x2="{x:.2f}" y2="{Y_BAR}"
+        stroke="#918680" stroke-width=".75" stroke-linecap="round"/>
 
-    x_39 = x_for_score(39)
-    x_57 = x_for_score(57)
+  <line x1="{X_START}" y1="{Y_BAR}" x2="{X_END}" y2="{Y_BAR}"
+        stroke="url(#bar-gradient)" stroke-width="13" stroke-linecap="round"/>
 
-    svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}">']
+  <circle cx="{x:.2f}" cy="{Y_DOT}" r="{DOT_R}"
+          fill="#918680" stroke="#918680" stroke-width=".75"/>
 
-    svg.append(f'''
-    <text x="{W/2}" y="55" text-anchor="middle"
-          font-family="Arial, Helvetica, sans-serif"
-          font-size="28" font-weight="700" fill="{navy}">
-      Future-Proof Forecast
-    </text>
-    ''')
+  <text x="{x:.2f}" y="10.12" text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#918680">
+    <tspan x="{x:.2f}" y="10.12">{top_text}</tspan>
+    {label_tspan}
+  </text>
+</svg>'''
 
-    svg.append(f'''
-    <rect x="{bar_x}" y="{bar_y}" width="{bar_w}" height="{bar_h}"
-          rx="{radius}" ry="{radius}" fill="{tan}" />
-    ''')
+    Path(output_svg).write_text(svg, encoding="utf-8")
 
-    svg.append(f'<line x1="{x_39}" y1="{bar_y-10}" x2="{x_39}" y2="{bar_y+bar_h+10}" stroke="{white}" stroke-width="4"/>')
-    svg.append(f'<line x1="{x_57}" y1="{bar_y-10}" x2="{x_57}" y2="{bar_y+bar_h+10}" stroke="{white}" stroke-width="4"/>')
-
-    svg.append(f'''
-    <line x1="{marker_x}" y1="{bar_y-34}" x2="{marker_x}" y2="{bar_y+bar_h+34}"
-          stroke="{orange}" stroke-width="6"/>
-    ''')
-
-    svg.append(f'''
-    <circle cx="{marker_x}" cy="{bar_y + bar_h/2}" r="12"
-            fill="{orange}" stroke="{white}" stroke-width="3"/>
-    ''')
-
-    svg.append(f'''
-    <text x="{marker_x}" y="{bar_y-48}" text-anchor="middle"
-          font-family="Arial, Helvetica, sans-serif"
-          font-size="24" font-weight="700" fill="{navy}">
-      {total_score}
-    </text>
-    ''')
-
-    svg.append(f'''
-    <text x="{(bar_x + x_39)/2}" y="{bar_y+bar_h+52}" text-anchor="middle"
-          font-family="Arial, Helvetica, sans-serif"
-          font-size="22" font-weight="700" fill="{text_gray}">
-      Fragile
-    </text>
-    ''')
-
-    svg.append(f'''
-    <text x="{(x_39 + x_57)/2}" y="{bar_y+bar_h+52}" text-anchor="middle"
-          font-family="Arial, Helvetica, sans-serif"
-          font-size="22" font-weight="700" fill="{text_gray}">
-      Vulnerable
-    </text>
-    ''')
-
-    svg.append(f'''
-    <text x="{(x_57 + (bar_x+bar_w))/2}" y="{bar_y+bar_h+52}" text-anchor="middle"
-          font-family="Arial, Helvetica, sans-serif"
-          font-size="22" font-weight="700" fill="{text_gray}">
-      Future-Proof
-    </text>
-    ''')
-
-    svg.append(f'''
-    <text x="{W/2}" y="{bar_y+bar_h+110}" text-anchor="middle"
-          font-family="Arial, Helvetica, sans-serif"
-          font-size="24" font-weight="700" fill="{navy}">
-      {tier}
-    </text>
-    ''')
-
-    svg.append("</svg>")
-    svg_str = "\n".join(svg)
-
-    Path(output_svg).write_text(svg_str, encoding="utf-8")
-
-    cairosvg.svg2png(
-        bytestring=svg_str.encode("utf-8"),
-        write_to=output_png,
-        output_width=W * 3,
-        output_height=H * 3,
-    )
+    if output_png:
+        cairosvg.svg2png(
+            bytestring=svg.encode("utf-8"),
+            write_to=output_png,
+            scale=png_scale,
+        )
 
     return output_svg, output_png
